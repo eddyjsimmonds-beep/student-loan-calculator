@@ -4,7 +4,6 @@ import altair as alt
 import urllib.parse
 
 # --- Configuration ---
-# CHANGED: "centered" layout works much better on mobile than "wide"
 st.set_page_config(page_title="Rethink Repayment Calculator", page_icon="🎓", layout="centered")
 
 # --- CUSTOMIZE YOUR LINK HERE ---
@@ -14,15 +13,17 @@ APP_URL = "https://student-loan-reality.streamlit.app"
 st.markdown("""
 <style>
     .big-font { font-size:24px !important; font-weight: bold; }
-    .stMetric { background-color: #f8f9fa; padding: 10px; border-radius: 10px; border: 1px solid #dee2e6; }
+    /* Removed the .stMetric block that was breaking Dark Mode */
+    
+    /* Make buttons full width on mobile for easier tapping */
     .stButton button { width: 100%; border-radius: 8px; font-weight: bold;}
+    
     /* Fix logo centering */
     [data-testid="stImage"] { display: block; margin-left: auto; margin-right: auto; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- Header Section ---
-# Centered layout makes columns tight, so we use a clean stack for mobile
 try:
     st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=200)
 except:
@@ -33,13 +34,12 @@ st.markdown("### ⚠️ Are you paying off a loan, or just a lifelong tax?")
 st.markdown("Discover the **'negative amortization'** trap: See why your payments might not even cover the interest.")
 
 # --- MOBILE TIP ---
-# This helps mobile users find the sidebar without cluttering the UI
 with st.expander("📝 **CLICK HERE to enter your loan details**", expanded=True):
     st.info("👈 **Desktop:** Use the Sidebar on the left.\n\n📱 **Mobile:** Tap the **'>'** arrow at the top-left to open settings.")
 
 st.divider()
 
-# --- SIDEBAR: INPUTS (Kept all features) ---
+# --- SIDEBAR: INPUTS ---
 with st.sidebar:
     st.header("1. Select Your Plan")
     plan_type = st.radio(
@@ -146,9 +146,9 @@ df, final_balance, total_repaid = run_simulation()
 multiple = total_repaid / current_balance
 
 # --- VERDICT DASHBOARD ---
-st.subheader("📊 The Verdict")
+st.header("📊 The Verdict")
 
-# 2 Columns allows metrics to be readable on mobile (4 cols gets squashed)
+# Using 2 columns instead of 4 for mobile readability
 c1, c2 = st.columns(2)
 c1.metric("Original Loan", f"£{current_balance:,.0f}")
 c2.metric("Total Paid", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x", delta_color="inverse")
@@ -191,14 +191,17 @@ with tab1:
         tooltip=['Year', 'Paid']
     )
 
-    # CRITICAL FIX FOR MOBILE: Removed '.interactive()' to stop scroll trapping
     st.altair_chart((area_balance + line_paid), use_container_width=True)
     
     if extra_payment > 0:
          st.info(f"ℹ️ **Overpayment:** You are paying an extra £{extra_payment}/mo.")
 
     with st.expander("📂 View Detailed Data Table"):
-        st.dataframe(df.style.format({"Balance": "£{:,.0f}", "Paid": "£{:,.0f}", "Salary": "£{:,.0f}", "Interest": "£{:,.0f}"}))
+        # FIXED: Added .hide() to remove the duplicate index column
+        st.dataframe(
+            df.style.format({"Balance": "£{:,.0f}", "Paid": "£{:,.0f}", "Salary": "£{:,.0f}", "Interest": "£{:,.0f}"}).hide(),
+            use_container_width=True
+        )
 
 with tab2:
     st.subheader("📢 Spread the Word")
