@@ -115,7 +115,7 @@ def run_simulation():
         balance = balance + interest_accrued - total_monthly_pay
         total_paid += total_monthly_pay
         
-        # Record Year End (Year 0 to 29)
+        # Record Year End
         if month % 12 == 0 or month == (term_years * 12) - 1:
             data.append({
                 "Year": year,
@@ -129,7 +129,7 @@ def run_simulation():
             balance = 0
             break
             
-    # FIXED: If debt remains at end of Year 29, add a 'Year 30' point so graph touches the end
+    # If debt remains at end of Year 29, add a 'Year 30' point so graph touches the end
     if balance > 0:
         data.append({
             "Year": 30,
@@ -151,7 +151,8 @@ st.subheader("📊 The Verdict")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Original Loan", f"£{current_balance:,.0f}")
 c2.metric("Total You Pay", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x Original Loan", delta_color="inverse")
-c3.metric("Amount Written Off", f"£{max(0, final_balance:,.0f)}")
+# FIXED LINE BELOW
+c3.metric("Amount Written Off", f"£{max(0, final_balance):,.0f}")
 
 if final_balance > 0:
     c4.metric("Debt Free In", "Never (30 Years)", delta="Term Ends", delta_color="off")
@@ -173,7 +174,7 @@ tab1, tab2 = st.tabs(["📉 Visualise Trajectory", "📲 Share Result"])
 with tab1:
     st.markdown("#### Debt Balance (Red) vs Cumulative Payments (Blue)")
     
-    # FIXED: Explicit X-Axis range [0, 30] to prevent cut-off
+    # Explicit X-Axis range [0, 30]
     base = alt.Chart(df).encode(
         x=alt.X('Year', title='Years since graduation', scale=alt.Scale(domain=[0, 30]))
     )
@@ -188,7 +189,6 @@ with tab1:
         tooltip=['Year', 'Paid']
     )
 
-    # FIXED: Removed .interactive() to stop the weird zoom/scroll behavior
     st.altair_chart((area_balance + line_paid), use_container_width=True)
     
     if extra_payment > 0:
