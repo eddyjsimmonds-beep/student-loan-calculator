@@ -3,57 +3,98 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-# --- Configuration & Page Setup ---
-st.set_page_config(page_title="Student Loan Reality Calculator", layout="centered")
+# --- Configuration ---
+st.set_page_config(page_title="Rethink Repayment Calculator", page_icon="🎓", layout="centered")
 
-st.title("🎓 The Student Loan Reality Check")
+# --- Branding Section ---
+# Try to display the logo. If it's not uploaded yet, it just skips it without crashing.
+try:
+    st.image("logo.png", width=200) 
+except:
+    st.header("🎓 Rethink Repayment")
+
+st.title("The Student Loan Reality Check")
 st.markdown("""
-This calculator helps you visualize the long-term impact of **Plan 2 Student Loans** (post-2012).
-It models how high interest rates (RPI + 3%) can cause your loan to grow even while you make repayments.
+**Stop guessing.** See how the **Plan 2** interest trap (RPI + 3%) affects your actual life path.
+*Inspired by the Money Gains Podcast & The Rethink Repayment Campaign.*
 """)
 
+st.divider()
+
 # --- Sidebar Inputs ---
-st.sidebar.header("Your Details")
-
+st.sidebar.header("1. Your Loan")
 current_balance = st.sidebar.number_input("Current Loan Balance (£)", value=45000, step=1000)
-annual_salary = st.sidebar.number_input("Annual Salary (£)", value=30000, step=500)
-salary_growth = st.sidebar.slider("Expected Annual Salary Growth (%)", 0.0, 10.0, 2.5, 0.1) / 100
 
-st.sidebar.header("Economic Assumptions")
+st.sidebar.header("2. Your Career")
+annual_salary = st.sidebar.number_input("Current Annual Salary (£)", value=30000, step=500)
+
+# --- NEW: Career Pathways ---
+st.sidebar.subheader("Projected Career Path")
+career_type = st.sidebar.selectbox(
+    "Select a career trajectory:",
+    ("Steady Growth (Public Sector/Standard)", 
+     "Fast Track (Tech/Finance/Law)", 
+     "Late Bloomer (Doctor/PhD)", 
+     "Custom (Set your own flat rate)")
+)
+
+# Logic to determine growth rate based on selection
+if career_type == "Custom (Set your own flat rate)":
+    custom_growth = st.sidebar.slider("Annual Growth %", 0.0, 10.0, 2.5, 0.1) / 100
+else:
+    st.sidebar.info(f"Using standard assumptions for {career_type.split('(')[0]}")
+
+st.sidebar.header("3. Economy")
 rpi = st.sidebar.slider("RPI (Inflation) Rate (%)", 0.0, 15.0, 3.5, 0.1) / 100
 
-st.sidebar.header("Loan Constants (Plan 2)")
-# Thresholds as of 2025/26 estimates
-repayment_threshold = st.sidebar.number_input("Repayment Threshold (£)", value=29385)
+# Constants
+repayment_threshold = 27295  # Plan 2 Threshold (approx)
 lower_interest_threshold = 28470
 upper_interest_threshold = 51245
 term_years = 30
 
-# --- Calculation Logic ---
+# --- Calculation Engine ---
 
-def calculate_loan_trajectory(balance, salary, growth, rpi, repay_thresh):
+def get_growth_rate(year, type, custom_rate=0.025):
+    """Returns the growth rate for a specific year based on career type"""
+    if type == "Custom (Set your own flat rate)":
+        return custom_rate
+    
+    elif "Steady" in type:
+        return 0.025  # Steady 2.5% raises forever
+        
+    elif "Fast Track" in type:
+        # Aggressive growth early career, plateau later
+        if year < 5: return 0.10   # 10% jumps first 5 years
+        if year < 10: return 0.05  # 5% next 5 years
+        return 0.03                # 3% thereafter
+        
+    elif "Late" in type:
+        # Low growth during training, huge jump, then steady
+        if year < 4: return 0.01   # 1% (Residency/Training)
+        if year == 4: return 0.25  # 25% Jump (Qualifying)
+        return 0.03                # Steady thereafter
+    
+    return 0.025
+
+def calculate_loan_trajectory(balance, start_salary, profile_type, rpi, custom_growth_rate):
     data = []
     total_paid = 0
-    
-    # We simulate month by month for accuracy
-    months = term_years * 12
     current_balance = balance
-    current_salary = salary
+    current_salary = start_salary
+    
+    # We simulate month by month
+    months = term_years * 12
     
     for month in range(months):
-        year = month // 12
+        year_idx = month // 12
         
-        # Update salary annually
+        # Salary Growth (Happens once a year)
         if month > 0 and month % 12 == 0:
-            current_salary *= (1 + growth)
-            # NOTE: In reality, thresholds also rise, but currently they are frozen/stagnant.
-            # You can uncomment the line below to simulate threshold growth with RPI:
-            # repay_thresh *= (1 + rpi) 
+            growth_rate = get_growth_rate(year_idx, profile_type, custom_growth_rate)
+            current_salary *= (1 + growth_rate)
 
-        # 1. Calculate Interest Rate for this month
-        # Rate is RPI if under lower threshold
-        # Rate is RPI + 3% if over upper threshold
-        # Rate scales linearly in between
+        # 1. Interest Rate Calculation
         if current_salary <= lower_interest_threshold:
             interest_rate = rpi
         elif current_salary >= upper_interest_threshold:
@@ -64,27 +105,26 @@ def calculate_loan_trajectory(balance, salary, growth, rpi, repay_thresh):
             
         monthly_interest_rate = interest_rate / 12
         
-        # 2. Calculate Repayment
-        # 9% of everything earned above the threshold
+        # 2. Repayment Calculation (9% over threshold)
         monthly_salary = current_salary / 12
-        monthly_threshold = repay_thresh / 12
+        monthly_threshold = repayment_threshold / 12
         
         if monthly_salary > monthly_threshold:
             repayment = (monthly_salary - monthly_threshold) * 0.09
         else:
             repayment = 0
             
-        # 3. Apply to Balance
+        # 3. Update Balance
         interest_accrued = current_balance * monthly_interest_rate
         final_balance_change = interest_accrued - repayment
         current_balance += final_balance_change
         
         total_paid += repayment
         
-        # Append data for graphing (record end of each year)
+        # Store Data
         if month % 12 == 0 or month == months - 1:
             data.append({
-                "Year": year,
+                "Year": year_idx,
                 "Loan Balance": max(0, current_balance),
                 "Total Paid": total_paid,
                 "Annual Salary": current_salary,
@@ -93,49 +133,61 @@ def calculate_loan_trajectory(balance, salary, growth, rpi, repay_thresh):
             
         if current_balance <= 0:
             current_balance = 0
-            break
+            break # Loan cleared
 
     return pd.DataFrame(data), current_balance, total_paid
 
-# --- Run Calculation ---
+# --- Run ---
+custom_rate = 0.025
+if career_type == "Custom (Set your own flat rate)":
+    custom_rate = custom_growth
+
 df, final_balance, total_repaid = calculate_loan_trajectory(
-    current_balance, annual_salary, salary_growth, rpi, repayment_threshold
+    current_balance, annual_salary, career_type, rpi, custom_rate
 )
 
-# --- Display Results ---
-
-st.divider()
+# --- Results Dashboard ---
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Total Repaid", f"£{total_repaid:,.0f}")
+    st.metric("Total You Will Pay", f"£{total_repaid:,.0f}")
 with col2:
-    st.metric("Debt Written Off", f"£{max(0, final_balance):,.0f}")
+    st.metric("Debt Written Off", f"£{max(0, final_balance):,.0f}", help="Amount forgiven after 30 years")
 with col3:
-    is_paid_off = final_balance <= 0
-    st.metric("Did you clear it?", "YES" if is_paid_off else "NO")
+    multiple = total_repaid / current_balance
+    st.metric("The 'Multitude'", f"{multiple:.2f}x", delta_color="inverse")
 
-# --- The "Ripped Off" Factor ---
-# Calculate ratio of payment to original loan
-multiple = total_repaid / current_balance
-st.subheader(f" The 'Multitude'")
-st.markdown(f"You will pay back **{multiple:.2f}x** your current loan balance.")
+# --- Analysis Text ---
+if final_balance > 0:
+    st.warning(f"⚠️ ** The Trap:** You paid **£{total_repaid:,.0f}**, but the government still wrote off **£{final_balance:,.0f}**. The interest grew faster than you could pay it.")
+else:
+    st.success(f"🎉 **Freedom:** You actually cleared the debt! It took you {len(df)} years.")
 
-if not is_paid_off:
-    st.warning(f"⚠️ **Negative Amortization Alert:** Despite paying **£{total_repaid:,.0f}**, your debt was written off at **£{final_balance:,.0f}**. You effectively paid a 'graduate tax' for 30 years without clearing the principal.")
+# --- Charts ---
+st.subheader("Your Debt vs. Your Cumulative Payments")
 
-# --- Visualisation ---
-st.subheader("Projected Loan Balance Over Time")
-chart = alt.Chart(df).mark_line(strokeWidth=3).encode(
-    x='Year',
-    y='Loan Balance',
-    tooltip=['Year', 'Loan Balance', 'Total Paid', 'Annual Salary']
-).interactive()
+# Create a dual-line chart
+base = alt.Chart(df).encode(x='Year')
 
-st.altair_chart(chart, use_container_width=True)
+line_debt = base.mark_line(color='#FF4B4B', strokeWidth=3).encode(
+    y=alt.Y('Loan Balance', title='Amount (£)'),
+    tooltip=['Year', 'Loan Balance', 'Annual Salary']
+)
 
-st.subheader("Data Table")
-st.dataframe(df.style.format({"Loan Balance": "£{:,.2f}", "Total Paid": "£{:,.2f}", "Annual Salary": "£{:,.2f}", "Interest Rate": "{:.2f}%"}))
+line_paid = base.mark_line(color='#1E90FF', strokeWidth=3, strokeDash=[5,5]).encode(
+    y='Total Paid',
+    tooltip=['Year', 'Total Paid']
+)
 
-st.markdown("---")
-st.caption("Disclaimer: This is for illustrative purposes. Actual RPI and thresholds vary by government policy.")
+st.altair_chart((line_debt + line_paid).interactive(), use_container_width=True)
+
+st.caption("🔴 Red Line: What you owe (Balance) | 🔵 Blue Dashed: Total cash you have handed over")
+
+# --- Detailed Table ---
+with st.expander("See Full Data Table"):
+    st.dataframe(df.style.format({
+        "Loan Balance": "£{:,.2f}", 
+        "Total Paid": "£{:,.2f}", 
+        "Annual Salary": "£{:,.2f}", 
+        "Interest Rate": "{:.2f}%"
+    }))
