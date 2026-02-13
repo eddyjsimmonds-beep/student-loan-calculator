@@ -83,15 +83,24 @@ def run_simulation():
     balance = current_balance
     salary = annual_salary
     
-    # Loop through 30 years (360 months)
+    # 1. Add Initial State (Year 0)
+    data.append({
+        "Year": 0,
+        "Balance": balance,
+        "Paid": 0,
+        "Salary": salary,
+        "Interest": 0
+    })
+    
+    # 2. Loop through 360 months (30 Years)
     for month in range(term_years * 12):
-        year = month // 12
+        year_idx = month // 12
         
-        # Annual Salary Bump
+        # Salary Growth (Applied at start of each new year, excluding Year 0)
         if month > 0 and month % 12 == 0:
-            salary *= (1 + get_growth_rate(year, career_type, custom_rate))
+            salary *= (1 + get_growth_rate(year_idx, career_type, custom_rate))
 
-        # 1. Interest Rate
+        # Interest Rate Logic
         if salary <= lower_interest_threshold: interest_rate = rpi
         elif salary >= upper_interest_threshold: interest_rate = rpi + 0.03
         else:
@@ -100,7 +109,7 @@ def run_simulation():
             
         monthly_rate = interest_rate / 12
         
-        # 2. Repayment
+        # Repayment Logic
         monthly_salary = salary / 12
         monthly_thresh = repayment_threshold / 12
         
@@ -110,34 +119,26 @@ def run_simulation():
         
         total_monthly_pay = mandatory_pay + extra_payment
         
-        # 3. Balance Update
+        # Update Balance
         interest_accrued = balance * monthly_rate
         balance = balance + interest_accrued - total_monthly_pay
+        
+        # Prevent negative balance (Loan cleared)
+        if balance < 0:
+            total_monthly_pay += balance # Adjust last payment to be exact
+            balance = 0
+            
         total_paid += total_monthly_pay
         
-        # Record Year End
-        if month % 12 == 0 or month == (term_years * 12) - 1:
+        # 3. Record Data at END of each Year (Month 11, 23, 35...)
+        if (month + 1) % 12 == 0:
             data.append({
-                "Year": year,
-                "Balance": max(0, balance),
+                "Year": (month + 1) // 12, # returns 1, 2, ... 30
+                "Balance": balance,
                 "Paid": total_paid,
                 "Salary": salary,
                 "Interest": interest_accrued * 12 
             })
-            
-        if balance <= 0:
-            balance = 0
-            break
-            
-    # If debt remains at end of Year 29, add a 'Year 30' point so graph touches the end
-    if balance > 0:
-        data.append({
-            "Year": 30,
-            "Balance": balance,
-            "Paid": total_paid,
-            "Salary": salary,
-            "Interest": 0
-        })
 
     return pd.DataFrame(data), balance, total_paid
 
@@ -151,13 +152,17 @@ st.subheader("📊 The Verdict")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Original Loan", f"£{current_balance:,.0f}")
 c2.metric("Total You Pay", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x Original Loan", delta_color="inverse")
-# FIXED LINE BELOW
+
+# FIXED: Moved the formatting outside the max() function
 c3.metric("Amount Written Off", f"£{max(0, final_balance):,.0f}")
 
+# Time Logic
 if final_balance > 0:
     c4.metric("Debt Free In", "Never (30 Years)", delta="Term Ends", delta_color="off")
 else:
-    c4.metric("Debt Free In", f"{len(df)} Years", delta="Cleared!", delta_color="normal")
+    # Find the first year where balance hit 0
+    clear_year = df[df['Balance'] == 0]['Year'].min()
+    c4.metric("Debt Free In", f"{int(clear_year)} Years", delta="Cleared!", delta_color="normal")
 
 st.markdown("---")
 if final_balance > 0:
@@ -166,7 +171,7 @@ if final_balance > 0:
     else:
         st.warning(f"### 🟠 Status: The 'Graduate Tax'\nYou will likely never clear the balance. The loan functions as a 9% tax on your income for 30 years.")
 else:
-    st.success(f"### 🟢 Status: The Repayer\nCongratulations! You are projected to clear the loan in Year {len(df)}.")
+    st.success(f"### 🟢 Status: The Repayer\nCongratulations! You are projected to clear the loan in Year {int(df[df['Balance'] == 0]['Year'].min())}.")
 
 # --- TABS: VISUALS & SHARING ---
 tab1, tab2 = st.tabs(["📉 Visualise Trajectory", "📲 Share Result"])
@@ -174,21 +179,24 @@ tab1, tab2 = st.tabs(["📉 Visualise Trajectory", "📲 Share Result"])
 with tab1:
     st.markdown("#### Debt Balance (Red) vs Cumulative Payments (Blue)")
     
-    # Explicit X-Axis range [0, 30]
+    # 1. Base Chart
     base = alt.Chart(df).encode(
         x=alt.X('Year', title='Years since graduation', scale=alt.Scale(domain=[0, 30]))
     )
     
+    # 2. Area Chart (Red)
     area_balance = base.mark_area(opacity=0.3, color='#ff4b4b').encode(
         y=alt.Y('Balance', title='Amount (£)'),
         tooltip=['Year', 'Balance', 'Salary']
     )
     
+    # 3. Line Chart (Blue)
     line_paid = base.mark_line(color='#1E90FF', strokeWidth=4).encode(
         y='Paid',
         tooltip=['Year', 'Paid']
     )
 
+    # Combine
     st.altair_chart((area_balance + line_paid), use_container_width=True)
     
     if extra_payment > 0:
