@@ -131,14 +131,21 @@ def run_simulation():
         total_paid += total_monthly_pay
         
         # 3. Record Data at END of each Year (Month 11, 23, 35...)
+        # This ensures we get Year 1, Year 2... Year 30 exactly once.
         if (month + 1) % 12 == 0:
             data.append({
-                "Year": (month + 1) // 12, # returns 1, 2, ... 30
+                "Year": (month + 1) // 12,
                 "Balance": balance,
                 "Paid": total_paid,
                 "Salary": salary,
                 "Interest": interest_accrued * 12 
             })
+            
+        # Optimization: If cleared, we can just fill the rest with 0s or let the graph flatten
+        if balance <= 0 and (month + 1) % 12 == 0:
+            # We continue the loop to fill the graph with flat line, 
+            # or break. Let's continue so the graph goes to Year 30.
+            pass
 
     return pd.DataFrame(data), balance, total_paid
 
@@ -152,13 +159,11 @@ st.subheader("📊 The Verdict")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Original Loan", f"£{current_balance:,.0f}")
 c2.metric("Total You Pay", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x Original Loan", delta_color="inverse")
-
-# FIXED: Moved the formatting outside the max() function
 c3.metric("Amount Written Off", f"£{max(0, final_balance):,.0f}")
 
-# Time Logic
+# FIXED: Shortened text to prevent "..." truncation
 if final_balance > 0:
-    c4.metric("Debt Free In", "Never (30 Years)", delta="Term Ends", delta_color="off")
+    c4.metric("Debt Free In", "Never", delta="30 Year Term Ends", delta_color="off")
 else:
     # Find the first year where balance hit 0
     clear_year = df[df['Balance'] == 0]['Year'].min()
