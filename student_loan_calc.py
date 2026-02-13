@@ -19,20 +19,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Header Section ---
-# UPDATED: Changed column ratio to [1, 2] to give logo more space
 col_head1, col_head2 = st.columns([1, 2])
 
 with col_head1:
     try:
-        # UPDATED: Increased width to 300px
         st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=300)
     except:
         st.markdown("# 🎓")
 
 with col_head2:
     st.title("Student Loan Reality Check")
-    st.markdown("### The true cost of Plan 2 loans (RPI + 3%)")
-    st.markdown("Use this tool to project your long-term repayment trajectory.")
+    st.markdown("### ⚠️ Are you paying off a loan, or just a 30-year tax?")
+    st.markdown("Discover the **'negative amortization'** trap: See why your payments might not even cover the interest.")
 
 st.divider()
 
