@@ -1,22 +1,38 @@
+Here is the complete, final code with every feature we discussed included: branding, career paths, the "Debt Trap" verdict, and the omni-channel sharing buttons.
+
+📋 Instructions
+Copy the code block below.
+
+Paste it into your student_loan_calc.py file.
+
+Save and commit to GitHub.
+
+Python
 import streamlit as st
 import pandas as pd
 import altair as alt
+import urllib.parse
 
-# --- Page Config ---
+# --- Configuration ---
 st.set_page_config(page_title="Rethink Repayment Calculator", page_icon="🎓", layout="wide")
 
-# --- Custom Styling ---
+# --- CUSTOMIZE YOUR LINK HERE ---
+# Once you deploy, paste your actual Streamlit link here so share buttons work perfectly
+APP_URL = "https://student-loan-reality.streamlit.app"
+
+# --- Custom CSS Styling ---
 st.markdown("""
 <style>
     .big-font { font-size:24px !important; font-weight: bold; }
     .stMetric { background-color: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #dee2e6; }
-    .share-box { border: 2px dashed #4CAF50; padding: 15px; border-radius: 10px; background-color: #e8f5e9; }
+    .stButton button { width: 100%; border-radius: 8px; font-weight: bold;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Header ---
-col_head1, col_head2 = st.columns([1, 4])
+# --- Header Section ---
+col_head1, col_head2 = st.columns([1, 5])
 with col_head1:
+    # Try to load 'logo.png'. If missing, show an emoji instead.
     try:
         st.image("logo.png", width=120)
     except:
@@ -25,11 +41,11 @@ with col_head1:
 with col_head2:
     st.title("Student Loan Reality Check")
     st.markdown("### The true cost of Plan 2 loans (RPI + 3%)")
-    st.markdown("Use this tool to project your long-term repayment trajectory.")
+    st.markdown("Use this tool to project your long-term repayment trajectory and see if you are really clearing your debt.")
 
 st.divider()
 
-# --- Sidebar Inputs ---
+# --- SIDEBAR: INPUTS ---
 with st.sidebar:
     st.header("1. Your Profile")
     current_balance = st.number_input("Current Loan Balance (£)", value=45000, step=1000)
@@ -44,6 +60,7 @@ with st.sidebar:
          "Custom Flat Rate"),
     )
     
+    # Logic for custom rate
     custom_rate = 0.025
     if career_type == "Custom Flat Rate":
         custom_rate = st.slider("Annual Growth %", 0.0, 10.0, 2.5, 0.1) / 100
@@ -51,18 +68,22 @@ with st.sidebar:
     st.header("3. Economic Assumptions")
     rpi = st.slider("RPI (Inflation) %", 0.0, 15.0, 3.5, 0.1, help="Controls interest rate (RPI to RPI+3%).") / 100
     
-    # --- UPDATED SECTION ---
     st.header("4. Voluntary Overpayments")
     st.caption("Is it worth paying more?")
     extra_payment = st.number_input("Monthly Overpayment (£)", value=0, step=50, help="Add a voluntary monthly payment to see if it clears the debt faster.")
+    
+    st.markdown("---")
+    st.caption("Plan 2 Thresholds (Approx):")
+    st.caption("Repayment: £27,295 | Interest Max: £51,245")
 
-# --- Constants (Plan 2) ---
+# --- CALCULATOR ENGINE ---
+
+# Constants (Plan 2)
 repayment_threshold = 27295
 lower_interest_threshold = 28470
 upper_interest_threshold = 51245
 term_years = 30
 
-# --- Logic Engine ---
 def get_growth_rate(year, type, custom):
     if type == "Custom Flat Rate": return custom
     if "Steady" in type: return 0.025
@@ -83,7 +104,7 @@ def run_simulation():
         if month > 0 and month % 12 == 0:
             salary *= (1 + get_growth_rate(year, career_type, custom_rate))
 
-        # 1. Interest Rate
+        # 1. Interest Rate Calculation
         if salary <= lower_interest_threshold: interest_rate = rpi
         elif salary >= upper_interest_threshold: interest_rate = rpi + 0.03
         else:
@@ -92,10 +113,13 @@ def run_simulation():
             
         monthly_rate = interest_rate / 12
         
-        # 2. Repayment
+        # 2. Repayment Calculation
         monthly_salary = salary / 12
         monthly_thresh = repayment_threshold / 12
-        mandatory_pay = (monthly_salary - monthly_thresh) * 0.09 if monthly_salary > monthly_thresh else 0
+        
+        mandatory_pay = 0
+        if monthly_salary > monthly_thresh:
+            mandatory_pay = (monthly_salary - monthly_thresh) * 0.09
         
         total_monthly_pay = mandatory_pay + extra_payment
         
@@ -120,10 +144,11 @@ def run_simulation():
             
     return pd.DataFrame(data), balance, total_paid
 
+# Run the math
 df, final_balance, total_repaid = run_simulation()
 multiple = total_repaid / current_balance
 
-# --- THE VERDICT SECTION ---
+# --- THE VERDICT DASHBOARD ---
 st.subheader("📊 The Verdict")
 
 c1, c2, c3, c4 = st.columns(4)
@@ -131,8 +156,7 @@ c1, c2, c3, c4 = st.columns(4)
 # 1. Original Loan
 c1.metric("Original Loan", f"£{current_balance:,.0f}")
 
-# 2. Total Paid (NOW RED if high)
-# delta_color="inverse" means: Positive numbers (increase) are RED, Negative numbers are GREEN.
+# 2. Total Paid (Red if High)
 c2.metric(
     "Total You Pay", 
     f"£{total_repaid:,.0f}", 
@@ -159,9 +183,10 @@ if final_balance > 0:
 else:
     st.success(f"### 🟢 Status: The Repayer\nCongratulations! You are projected to clear the loan in Year {len(df)}.")
 
-# --- Interactive Charts ---
+# --- TABS: VISUALS & SHARING ---
 tab1, tab2 = st.tabs(["📉 Visualise Trajectory", "📲 Share Result"])
 
+# TAB 1: CHARTS
 with tab1:
     st.markdown("#### Debt Balance (Red) vs Cumulative Payments (Blue)")
     
@@ -182,22 +207,58 @@ with tab1:
     if extra_payment > 0:
          st.info(f"ℹ️ **Overpayment Analysis:** You are paying an extra £{extra_payment}/mo. Toggle this to £0 in the sidebar to compare the difference.")
 
+    with st.expander("📂 View Detailed Data Table"):
+        st.dataframe(df.style.format({"Balance": "£{:,.0f}", "Paid": "£{:,.0f}", "Salary": "£{:,.0f}", "Interest": "£{:,.0f}"}))
+
+# TAB 2: SHARE BUTTONS
 with tab2:
     st.subheader("📢 Spread the Word")
-    st.write("Copy the summary below to share your reality check:")
+    st.write("Click a button to instantly share your reality check.")
     
+    # 1. Prepare Text
     share_text = f"""
-🚨 My Student Loan Reality Check
+🚨 My Student Loan Reality Check 🚨
 
 💸 Borrowed: £{current_balance:,.0f}
-📉 Paying Back: £{total_repaid:,.0f} ({multiple:.1f}x original)
+📉 Paying Back: £{total_repaid:,.0f} ({multiple:.1f}x)
 🛑 Debt Remaining: £{final_balance:,.0f}
 
-I will pay {multiple:.1f} times my loan and still not clear it.
+I will pay {multiple:.1f}x my loan and still not clear it.
 The system is broken.
-    """
-    st.code(share_text, language="text")
 
-# --- Data Table ---
-with st.expander("📂 View Detailed Data Table"):
-    st.dataframe(df.style.format({"Balance": "£{:,.0f}", "Paid": "£{:,.0f}", "Salary": "£{:,.0f}", "Interest": "£{:,.0f}"}))
+Check your numbers here: {APP_URL}
+#RethinkRepayment
+    """
+    
+    # 2. Encode for URLS
+    encoded_text = urllib.parse.quote(share_text)
+    encoded_url = urllib.parse.quote(APP_URL)
+    
+    # 3. Links
+    whatsapp_url = f"https://wa.me/?text={encoded_text}"
+    twitter_url = f"https://twitter.com/intent/tweet?text={encoded_text}"
+    telegram_url = f"https://t.me/share/url?url={encoded_url}&text={encoded_text}"
+    reddit_title = urllib.parse.quote(f"I will pay back £{total_repaid:,.0f} on my student loan. Reality Check.")
+    reddit_url = f"https://www.reddit.com/submit?url={encoded_url}&title={reddit_title}"
+    facebook_url = f"https://www.facebook.com/sharer/sharer.php?u={encoded_url}"
+    email_subject = urllib.parse.quote("Have you checked your student loan math?")
+    email_url = f"mailto:?subject={email_subject}&body={encoded_text}"
+
+    # 4. Buttons Grid
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.link_button("💚 Share on WhatsApp", whatsapp_url, use_container_width=True)
+        st.link_button("✈️ Share on Telegram", telegram_url, use_container_width=True)
+        st.link_button("🦅 Share on X (Twitter)", twitter_url, use_container_width=True)
+
+    with col2:
+        st.link_button("👽 Share on Reddit", reddit_url, use_container_width=True)
+        st.link_button("📘 Share on Facebook", facebook_url, use_container_width=True, help="Note: Facebook only shares the link, not the text.")
+        st.link_button("✉️ Share via Email", email_url, use_container_width=True)
+
+    # 5. Instagram Fallback
+    st.divider()
+    st.markdown("#### 📸 Instagram & TikTok")
+    st.caption("Copy the text below to paste into your Story or Post!")
+    st.code(share_text, language="text")
