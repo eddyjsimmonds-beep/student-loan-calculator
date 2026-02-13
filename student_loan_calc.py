@@ -23,24 +23,31 @@ col_head1, col_head2 = st.columns([1, 2])
 
 with col_head1:
     try:
-        st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=300)
+        st.image("logo.png", width=300)
     except:
         st.markdown("# 🎓")
 
 with col_head2:
     st.title("Student Loan Reality Check")
-    st.markdown("### ⚠️ Are you paying off a loan, or just a 30-year tax?")
+    st.markdown("### ⚠️ Are you paying off a loan, or just a lifelong tax?")
     st.markdown("Discover the **'negative amortization'** trap: See why your payments might not even cover the interest.")
 
 st.divider()
 
 # --- SIDEBAR: INPUTS ---
 with st.sidebar:
-    st.header("1. Your Profile")
+    st.header("1. Select Your Plan")
+    plan_type = st.radio(
+        "Which plan are you on?",
+        ("Plan 2 (Uni start 2012-2022)", "Plan 5 (Uni start 2023+)"),
+        help="Plan 2 writes off after 30 years. Plan 5 writes off after 40 years."
+    )
+    
+    st.header("2. Your Profile")
     current_balance = st.number_input("Current Loan Balance (£)", value=45000, step=1000)
     annual_salary = st.number_input("Current Annual Salary (£)", value=30000, step=500)
     
-    st.header("2. Career Projection")
+    st.header("3. Career Projection")
     career_type = st.selectbox(
         "Projected Income Trajectory",
         ("Steady Growth (Public Sector/Standard)", 
@@ -53,23 +60,42 @@ with st.sidebar:
     if career_type == "Custom Flat Rate":
         custom_rate = st.slider("Annual Growth %", 0.0, 10.0, 2.5, 0.1) / 100
 
-    st.header("3. Economic Assumptions")
-    rpi = st.slider("RPI (Inflation) %", 0.0, 15.0, 3.5, 0.1, help="Controls interest rate (RPI to RPI+3%).") / 100
+    st.header("4. Economic Assumptions")
+    rpi = st.slider("RPI (Inflation) %", 0.0, 15.0, 3.5, 0.1, help="Controls interest rate.") / 100
     
-    st.header("4. Voluntary Overpayments")
+    st.header("5. Voluntary Overpayments")
     st.caption("Is it worth paying more?")
     extra_payment = st.number_input("Monthly Overpayment (£)", value=0, step=50, help="Add a voluntary monthly payment to see if it clears the debt faster.")
     
+    # Dynamic Caption based on Plan
     st.markdown("---")
-    st.caption("Plan 2 Thresholds (Approx):")
-    st.caption("Repayment: £27,295 | Interest Max: £51,245")
+    if "Plan 5" in plan_type:
+        st.caption("ℹ️ **Plan 5 Rules:**")
+        st.caption("• Threshold: £25,000")
+        st.caption("• Term: 40 Years")
+        st.caption("• Interest: RPI Only (No +3%)")
+    else:
+        st.caption("ℹ️ **Plan 2 Rules:**")
+        st.caption("• Threshold: £27,295")
+        st.caption("• Term: 30 Years")
+        st.caption("• Interest: RPI to RPI+3%")
 
 # --- CALCULATOR ENGINE ---
 
-repayment_threshold = 27295
+# Set Constants based on Plan Selection
+if "Plan 5" in plan_type:
+    repayment_threshold = 25000
+    term_years = 40
+    # Plan 5 uses RPI only, so thresholds for variable interest don't apply
+    is_plan_5 = True
+else:
+    repayment_threshold = 27295
+    term_years = 30
+    is_plan_5 = False
+    
+# Plan 2 Interest Thresholds
 lower_interest_threshold = 28470
 upper_interest_threshold = 51245
-term_years = 30
 
 def get_growth_rate(year, type, custom):
     if type == "Custom Flat Rate": return custom
@@ -93,24 +119,29 @@ def run_simulation():
         "Interest": 0
     })
     
-    # 2. Loop through 360 months (30 Years)
+    # 2. Loop through months (360 for Plan 2, 480 for Plan 5)
     for month in range(term_years * 12):
         year_idx = month // 12
         
-        # Salary Growth (Applied at start of each new year, excluding Year 0)
+        # Salary Growth
         if month > 0 and month % 12 == 0:
             salary *= (1 + get_growth_rate(year_idx, career_type, custom_rate))
 
-        # Interest Rate Logic
-        if salary <= lower_interest_threshold: interest_rate = rpi
-        elif salary >= upper_interest_threshold: interest_rate = rpi + 0.03
+        # --- INTEREST RATE LOGIC ---
+        if is_plan_5:
+            # Plan 5 is just Inflation (RPI), no variable +3% element based on salary
+            interest_rate = rpi
         else:
-            scale = (salary - lower_interest_threshold) / (upper_interest_threshold - lower_interest_threshold)
-            interest_rate = rpi + (scale * 0.03)
+            # Plan 2 Logic (Variable Interest)
+            if salary <= lower_interest_threshold: interest_rate = rpi
+            elif salary >= upper_interest_threshold: interest_rate = rpi + 0.03
+            else:
+                scale = (salary - lower_interest_threshold) / (upper_interest_threshold - lower_interest_threshold)
+                interest_rate = rpi + (scale * 0.03)
             
         monthly_rate = interest_rate / 12
         
-        # Repayment Logic
+        # --- REPAYMENT LOGIC ---
         monthly_salary = salary / 12
         monthly_thresh = repayment_threshold / 12
         
@@ -126,7 +157,7 @@ def run_simulation():
         
         # Prevent negative balance (Loan cleared)
         if balance < 0:
-            total_monthly_pay += balance # Adjust last payment to be exact
+            total_monthly_pay += balance 
             balance = 0
             
         total_paid += total_monthly_pay
@@ -156,18 +187,18 @@ c2.metric("Total You Pay", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x Ori
 c3.metric("Amount Written Off", f"£{max(0, final_balance):,.0f}")
 
 if final_balance > 0:
-    c4.metric("Debt Free In", "Never", delta="30 Year Term Ends", delta_color="off")
+    c4.metric("Debt Free In", "Never", delta=f"{term_years} Year Term Ends", delta_color="off")
 else:
-    # Find the first year where balance hit 0
     clear_year = df[df['Balance'] == 0]['Year'].min()
     c4.metric("Debt Free In", f"{int(clear_year)} Years", delta="Cleared!", delta_color="normal")
 
 st.markdown("---")
+# Logic for status badges
 if final_balance > 0:
     if multiple > 2.0:
         st.error(f"### 🛑 Status: The Debt Trap\nYou will pay back **{multiple:.1f}x** what you borrowed, but the interest is so high that the debt never clears.")
     else:
-        st.warning(f"### 🟠 Status: The 'Graduate Tax'\nYou will likely never clear the balance. The loan functions as a 9% tax on your income for 30 years.")
+        st.warning(f"### 🟠 Status: The 'Lifelong Tax'\nYou will likely never clear the balance. The loan functions as a 9% tax on your income for {term_years} years.")
 else:
     st.success(f"### 🟢 Status: The Repayer\nCongratulations! You are projected to clear the loan in Year {int(df[df['Balance'] == 0]['Year'].min())}.")
 
@@ -177,24 +208,21 @@ tab1, tab2 = st.tabs(["📉 Visualise Trajectory", "📲 Share Result"])
 with tab1:
     st.markdown("#### Debt Balance (Red) vs Cumulative Payments (Blue)")
     
-    # 1. Base Chart
+    # Dynamic X-Axis Scale based on Plan Term (30 or 40)
     base = alt.Chart(df).encode(
-        x=alt.X('Year', title='Years since graduation', scale=alt.Scale(domain=[0, 30]))
+        x=alt.X('Year', title='Years since graduation', scale=alt.Scale(domain=[0, term_years]))
     )
     
-    # 2. Area Chart (Red)
     area_balance = base.mark_area(opacity=0.3, color='#ff4b4b').encode(
         y=alt.Y('Balance', title='Amount (£)'),
         tooltip=['Year', 'Balance', 'Salary']
     )
     
-    # 3. Line Chart (Blue)
     line_paid = base.mark_line(color='#1E90FF', strokeWidth=4).encode(
         y='Paid',
         tooltip=['Year', 'Paid']
     )
 
-    # Combine
     st.altair_chart((area_balance + line_paid), use_container_width=True)
     
     if extra_payment > 0:
@@ -207,8 +235,10 @@ with tab2:
     st.subheader("📢 Spread the Word")
     st.write("Click a button to instantly share your reality check.")
     
+    plan_name = "Plan 5" if is_plan_5 else "Plan 2"
+    
     share_text = f"""
-🚨 My Student Loan Reality Check 🚨
+🚨 My Student Loan Reality Check ({plan_name}) 🚨
 
 💸 Borrowed: £{current_balance:,.0f}
 📉 Paying Back: £{total_repaid:,.0f} ({multiple:.1f}x)
