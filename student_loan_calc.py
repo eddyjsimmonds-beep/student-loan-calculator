@@ -25,7 +25,7 @@ col_head1, col_head2 = st.columns([1, 2])
 with col_head1:
     try:
         # UPDATED: Increased width to 300px
-        st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=300)
+        st.image("logo.png", width=300)
     except:
         st.markdown("# 🎓")
 
@@ -248,4 +248,4 @@ Check your numbers here: {APP_URL}
     st.divider()
     st.markdown("#### 📸 Instagram & TikTok")
     st.caption("Copy the text below to paste into your Story or Post!")
-    st.code(share_text, language="text")ff
+    st.code(share_text, language="text")
