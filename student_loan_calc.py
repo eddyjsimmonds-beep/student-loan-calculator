@@ -37,7 +37,7 @@ st.markdown("Discover the **'negative amortization'** trap: See why your payment
 
 # --- MOBILE TIP ---
 with st.expander("📝 **CLICK HERE to enter your loan details**", expanded=True):
-    st.info("👈 **Desktop:** Use the Sidebar on the left.\n\n📱 **Mobile:** Tap the **'>'** (or **'>>'**) arrow at the top-left to open settings.")
+    st.info("👈 **Desktop:** Use the Sidebar on the left.\n\n📱 **Mobile:** Tap the **'>>'** arrow at the top-left to open settings.")
 
 st.divider()
 
