@@ -7,7 +7,6 @@ import urllib.parse
 st.set_page_config(page_title="Rethink Repayment Calculator", page_icon="🎓", layout="wide")
 
 # --- CUSTOMIZE YOUR LINK HERE ---
-# Once you deploy, paste your actual Streamlit link here so share buttons work perfectly
 APP_URL = "https://student-loan-reality.streamlit.app"
 
 # --- Custom CSS Styling ---
@@ -22,7 +21,6 @@ st.markdown("""
 # --- Header Section ---
 col_head1, col_head2 = st.columns([1, 5])
 with col_head1:
-    # Try to load 'logo.png'. If missing, show an emoji instead.
     try:
         st.image("logo.png", width=120)
     except:
@@ -31,7 +29,7 @@ with col_head1:
 with col_head2:
     st.title("Student Loan Reality Check")
     st.markdown("### The true cost of Plan 2 loans (RPI + 3%)")
-    st.markdown("Use this tool to project your long-term repayment trajectory and see if you are really clearing your debt.")
+    st.markdown("Use this tool to project your long-term repayment trajectory.")
 
 st.divider()
 
@@ -50,7 +48,6 @@ with st.sidebar:
          "Custom Flat Rate"),
     )
     
-    # Logic for custom rate
     custom_rate = 0.025
     if career_type == "Custom Flat Rate":
         custom_rate = st.slider("Annual Growth %", 0.0, 10.0, 2.5, 0.1) / 100
@@ -68,7 +65,6 @@ with st.sidebar:
 
 # --- CALCULATOR ENGINE ---
 
-# Constants (Plan 2)
 repayment_threshold = 27295
 lower_interest_threshold = 28470
 upper_interest_threshold = 51245
@@ -87,6 +83,7 @@ def run_simulation():
     balance = current_balance
     salary = annual_salary
     
+    # Loop through 30 years (360 months)
     for month in range(term_years * 12):
         year = month // 12
         
@@ -94,7 +91,7 @@ def run_simulation():
         if month > 0 and month % 12 == 0:
             salary *= (1 + get_growth_rate(year, career_type, custom_rate))
 
-        # 1. Interest Rate Calculation
+        # 1. Interest Rate
         if salary <= lower_interest_threshold: interest_rate = rpi
         elif salary >= upper_interest_threshold: interest_rate = rpi + 0.03
         else:
@@ -103,7 +100,7 @@ def run_simulation():
             
         monthly_rate = interest_rate / 12
         
-        # 2. Repayment Calculation
+        # 2. Repayment
         monthly_salary = salary / 12
         monthly_thresh = repayment_threshold / 12
         
@@ -118,7 +115,7 @@ def run_simulation():
         balance = balance + interest_accrued - total_monthly_pay
         total_paid += total_monthly_pay
         
-        # Record Year End
+        # Record Year End (Year 0 to 29)
         if month % 12 == 0 or month == (term_years * 12) - 1:
             data.append({
                 "Year": year,
@@ -132,42 +129,39 @@ def run_simulation():
             balance = 0
             break
             
+    # FIXED: If debt remains at end of Year 29, add a 'Year 30' point so graph touches the end
+    if balance > 0:
+        data.append({
+            "Year": 30,
+            "Balance": balance,
+            "Paid": total_paid,
+            "Salary": salary,
+            "Interest": 0
+        })
+
     return pd.DataFrame(data), balance, total_paid
 
-# Run the math
+# Run Simulation
 df, final_balance, total_repaid = run_simulation()
 multiple = total_repaid / current_balance
 
-# --- THE VERDICT DASHBOARD ---
+# --- VERDICT DASHBOARD ---
 st.subheader("📊 The Verdict")
 
 c1, c2, c3, c4 = st.columns(4)
-
-# 1. Original Loan
 c1.metric("Original Loan", f"£{current_balance:,.0f}")
+c2.metric("Total You Pay", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x Original Loan", delta_color="inverse")
+c3.metric("Amount Written Off", f"£{max(0, final_balance:,.0f)}")
 
-# 2. Total Paid (Red if High)
-c2.metric(
-    "Total You Pay", 
-    f"£{total_repaid:,.0f}", 
-    delta=f"{multiple:.1f}x Original Loan", 
-    delta_color="inverse" 
-)
-
-# 3. Write Off
-c3.metric("Amount Written Off", f"£{max(0, final_balance):,.0f}")
-
-# 4. Time
 if final_balance > 0:
     c4.metric("Debt Free In", "Never (30 Years)", delta="Term Ends", delta_color="off")
 else:
     c4.metric("Debt Free In", f"{len(df)} Years", delta="Cleared!", delta_color="normal")
 
-# Dynamic Status Badge
 st.markdown("---")
 if final_balance > 0:
     if multiple > 2.0:
-        st.error(f"### 🛑 Status: The Debt Trap\nYou will pay back **{multiple:.1f}x** what you borrowed, but the interest is so high that the debt never clears. This is negative amortization.")
+        st.error(f"### 🛑 Status: The Debt Trap\nYou will pay back **{multiple:.1f}x** what you borrowed, but the interest is so high that the debt never clears.")
     else:
         st.warning(f"### 🟠 Status: The 'Graduate Tax'\nYou will likely never clear the balance. The loan functions as a 9% tax on your income for 30 years.")
 else:
@@ -176,11 +170,13 @@ else:
 # --- TABS: VISUALS & SHARING ---
 tab1, tab2 = st.tabs(["📉 Visualise Trajectory", "📲 Share Result"])
 
-# TAB 1: CHARTS
 with tab1:
     st.markdown("#### Debt Balance (Red) vs Cumulative Payments (Blue)")
     
-    base = alt.Chart(df).encode(x=alt.X('Year', title='Years since graduation'))
+    # FIXED: Explicit X-Axis range [0, 30] to prevent cut-off
+    base = alt.Chart(df).encode(
+        x=alt.X('Year', title='Years since graduation', scale=alt.Scale(domain=[0, 30]))
+    )
     
     area_balance = base.mark_area(opacity=0.3, color='#ff4b4b').encode(
         y=alt.Y('Balance', title='Amount (£)'),
@@ -192,7 +188,8 @@ with tab1:
         tooltip=['Year', 'Paid']
     )
 
-    st.altair_chart((area_balance + line_paid).interactive(), use_container_width=True)
+    # FIXED: Removed .interactive() to stop the weird zoom/scroll behavior
+    st.altair_chart((area_balance + line_paid), use_container_width=True)
     
     if extra_payment > 0:
          st.info(f"ℹ️ **Overpayment Analysis:** You are paying an extra £{extra_payment}/mo. Toggle this to £0 in the sidebar to compare the difference.")
@@ -200,12 +197,10 @@ with tab1:
     with st.expander("📂 View Detailed Data Table"):
         st.dataframe(df.style.format({"Balance": "£{:,.0f}", "Paid": "£{:,.0f}", "Salary": "£{:,.0f}", "Interest": "£{:,.0f}"}))
 
-# TAB 2: SHARE BUTTONS
 with tab2:
     st.subheader("📢 Spread the Word")
     st.write("Click a button to instantly share your reality check.")
     
-    # 1. Prepare Text
     share_text = f"""
 🚨 My Student Loan Reality Check 🚨
 
@@ -220,11 +215,9 @@ Check your numbers here: {APP_URL}
 #RethinkRepayment
     """
     
-    # 2. Encode for URLS
     encoded_text = urllib.parse.quote(share_text)
     encoded_url = urllib.parse.quote(APP_URL)
     
-    # 3. Links
     whatsapp_url = f"https://wa.me/?text={encoded_text}"
     twitter_url = f"https://twitter.com/intent/tweet?text={encoded_text}"
     telegram_url = f"https://t.me/share/url?url={encoded_url}&text={encoded_text}"
@@ -234,20 +227,16 @@ Check your numbers here: {APP_URL}
     email_subject = urllib.parse.quote("Have you checked your student loan math?")
     email_url = f"mailto:?subject={email_subject}&body={encoded_text}"
 
-    # 4. Buttons Grid
     col1, col2 = st.columns(2)
-    
     with col1:
         st.link_button("💚 Share on WhatsApp", whatsapp_url, use_container_width=True)
         st.link_button("✈️ Share on Telegram", telegram_url, use_container_width=True)
         st.link_button("🦅 Share on X (Twitter)", twitter_url, use_container_width=True)
-
     with col2:
         st.link_button("👽 Share on Reddit", reddit_url, use_container_width=True)
-        st.link_button("📘 Share on Facebook", facebook_url, use_container_width=True, help="Note: Facebook only shares the link, not the text.")
+        st.link_button("📘 Share on Facebook", facebook_url, use_container_width=True, help="Note: Facebook only shares the link.")
         st.link_button("✉️ Share via Email", email_url, use_container_width=True)
 
-    # 5. Instagram Fallback
     st.divider()
     st.markdown("#### 📸 Instagram & TikTok")
     st.caption("Copy the text below to paste into your Story or Post!")
