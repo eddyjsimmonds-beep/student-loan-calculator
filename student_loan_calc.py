@@ -19,10 +19,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Header Section ---
-col_head1, col_head2 = st.columns([1, 5])
+# UPDATED: Changed column ratio to [1, 2] to give logo more space
+col_head1, col_head2 = st.columns([1, 2])
+
 with col_head1:
     try:
-        st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=120)
+        # UPDATED: Increased width to 300px
+        st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=300)
     except:
         st.markdown("# 🎓")
 
@@ -130,8 +133,7 @@ def run_simulation():
             
         total_paid += total_monthly_pay
         
-        # 3. Record Data at END of each Year (Month 11, 23, 35...)
-        # This ensures we get Year 1, Year 2... Year 30 exactly once.
+        # 3. Record Data at END of each Year
         if (month + 1) % 12 == 0:
             data.append({
                 "Year": (month + 1) // 12,
@@ -140,12 +142,6 @@ def run_simulation():
                 "Salary": salary,
                 "Interest": interest_accrued * 12 
             })
-            
-        # Optimization: If cleared, we can just fill the rest with 0s or let the graph flatten
-        if balance <= 0 and (month + 1) % 12 == 0:
-            # We continue the loop to fill the graph with flat line, 
-            # or break. Let's continue so the graph goes to Year 30.
-            pass
 
     return pd.DataFrame(data), balance, total_paid
 
@@ -161,7 +157,6 @@ c1.metric("Original Loan", f"£{current_balance:,.0f}")
 c2.metric("Total You Pay", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x Original Loan", delta_color="inverse")
 c3.metric("Amount Written Off", f"£{max(0, final_balance):,.0f}")
 
-# FIXED: Shortened text to prevent "..." truncation
 if final_balance > 0:
     c4.metric("Debt Free In", "Never", delta="30 Year Term Ends", delta_color="off")
 else:
@@ -253,4 +248,4 @@ Check your numbers here: {APP_URL}
     st.divider()
     st.markdown("#### 📸 Instagram & TikTok")
     st.caption("Copy the text below to paste into your Story or Post!")
-    st.code(share_text, language="text")
+    st.code(share_text, language="text")ff
