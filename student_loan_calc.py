@@ -9,52 +9,52 @@ st.set_page_config(page_title="Rethink Repayment Calculator", page_icon="🎓", 
 st.markdown("""
 <style>
     .big-font { font-size:24px !important; font-weight: bold; }
-    .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; }
+    .stMetric { background-color: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #dee2e6; }
     .share-box { border: 2px dashed #4CAF50; padding: 15px; border-radius: 10px; background-color: #e8f5e9; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- Header ---
-col_head1, col_head2 = st.columns([1, 3])
+col_head1, col_head2 = st.columns([1, 4])
 with col_head1:
-    # Try to load logo, fallback to emoji
     try:
-        st.image("logo.png", width=150)
+        st.image("logo.png", width=120)
     except:
         st.markdown("# 🎓")
 
 with col_head2:
-    st.title("The Student Loan Reality Check")
-    st.markdown("### Are you paying off a loan, or just paying a 30-year tax?")
-    st.markdown("Inspired by the **Rethink Repayment** campaign.")
+    st.title("Student Loan Reality Check")
+    st.markdown("### The true cost of Plan 2 loans (RPI + 3%)")
+    st.markdown("Use this tool to project your long-term repayment trajectory.")
 
 st.divider()
 
 # --- Sidebar Inputs ---
 with st.sidebar:
     st.header("1. Your Profile")
-    current_balance = st.number_input("Current Loan Balance (£)", value=45000, step=1000, help="Check your student finance portal for the exact number.")
+    current_balance = st.number_input("Current Loan Balance (£)", value=45000, step=1000)
     annual_salary = st.number_input("Current Annual Salary (£)", value=30000, step=500)
     
-    st.header("2. Your Future")
+    st.header("2. Career Projection")
     career_type = st.selectbox(
-        "Career Trajectory",
+        "Projected Income Trajectory",
         ("Steady Growth (Public Sector/Standard)", 
          "Fast Track (Tech/Finance/Law)", 
          "Late Bloomer (Doctor/PhD)", 
          "Custom Flat Rate"),
-        help="How will your salary change? Fast Track assumes big jumps early on."
     )
     
     custom_rate = 0.025
     if career_type == "Custom Flat Rate":
         custom_rate = st.slider("Annual Growth %", 0.0, 10.0, 2.5, 0.1) / 100
 
-    st.header("3. The Economy")
-    rpi = st.slider("RPI (Inflation) %", 0.0, 15.0, 3.5, 0.1, help="This dictates your interest rate (RPI to RPI+3%).") / 100
+    st.header("3. Economic Assumptions")
+    rpi = st.slider("RPI (Inflation) %", 0.0, 15.0, 3.5, 0.1, help="Controls interest rate (RPI to RPI+3%).") / 100
     
-    st.header("4. Experiment (New!)")
-    extra_payment = st.number_input("Monthly Overpayment (£)", value=0, step=50, help="If you paid extra voluntarily, would it actually help?")
+    # --- UPDATED SECTION ---
+    st.header("4. Voluntary Overpayments")
+    st.caption("Is it worth paying more?")
+    extra_payment = st.number_input("Monthly Overpayment (£)", value=0, step=50, help="Add a voluntary monthly payment to see if it clears the debt faster.")
 
 # --- Constants (Plan 2) ---
 repayment_threshold = 27295
@@ -111,7 +111,7 @@ def run_simulation():
                 "Balance": max(0, balance),
                 "Paid": total_paid,
                 "Salary": salary,
-                "Interest": interest_accrued * 12 # approx annual interest
+                "Interest": interest_accrued * 12 
             })
             
         if balance <= 0:
@@ -124,42 +124,54 @@ df, final_balance, total_repaid = run_simulation()
 multiple = total_repaid / current_balance
 
 # --- THE VERDICT SECTION ---
-st.subheader("🔮 Your Verdict")
+st.subheader("📊 The Verdict")
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Original Loan", f"£{current_balance:,.0f}")
-c2.metric("Total You Pay", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x Original")
-c3.metric("Written Off", f"£{max(0, final_balance):,.0f}")
-c4.metric("Debt Clear Year", "Never (30 Years)" if final_balance > 0 else f"Year {len(df)}")
 
-# Dynamic "Badge"
+# 1. Original Loan
+c1.metric("Original Loan", f"£{current_balance:,.0f}")
+
+# 2. Total Paid (NOW RED if high)
+# delta_color="inverse" means: Positive numbers (increase) are RED, Negative numbers are GREEN.
+c2.metric(
+    "Total You Pay", 
+    f"£{total_repaid:,.0f}", 
+    delta=f"{multiple:.1f}x Original Loan", 
+    delta_color="inverse" 
+)
+
+# 3. Write Off
+c3.metric("Amount Written Off", f"£{max(0, final_balance):,.0f}")
+
+# 4. Time
+if final_balance > 0:
+    c4.metric("Debt Free In", "Never (30 Years)", delta="Term Ends", delta_color="off")
+else:
+    c4.metric("Debt Free In", f"{len(df)} Years", delta="Cleared!", delta_color="normal")
+
+# Dynamic Status Badge
+st.markdown("---")
 if final_balance > 0:
     if multiple > 2.0:
-        st.error("### 🔴 Status: The Debt Trap")
-        st.write("You will pay back **double** what you borrowed and *still* owe money at the end. This is the definition of negative amortization.")
+        st.error(f"### 🛑 Status: The Debt Trap\nYou will pay back **{multiple:.1f}x** what you borrowed, but the interest is so high that the debt never clears. This is negative amortization.")
     else:
-        st.warning("### 🟠 Status: The Lifetime Tax")
-        st.write("You never clear the debt. It acts as a 9% tax on your income for 30 years.")
+        st.warning(f"### 🟠 Status: The 'Graduate Tax'\nYou will likely never clear the balance. The loan functions as a 9% tax on your income for 30 years.")
 else:
-    st.success("### 🟢 Status: The Escape Artist")
-    st.write(f"Congratulations! You beat the interest rates and cleared the loan in {len(df)} years.")
-    st.balloons()
+    st.success(f"### 🟢 Status: The Repayer\nCongratulations! You are projected to clear the loan in Year {len(df)}.")
 
 # --- Interactive Charts ---
-tab1, tab2 = st.tabs(["📉 Visualise the Debt", "📊 Share Your Stats"])
+tab1, tab2 = st.tabs(["📉 Visualise Trajectory", "📲 Share Result"])
 
 with tab1:
-    st.markdown("### Watch your debt grow (Red) vs What you pay (Blue)")
+    st.markdown("#### Debt Balance (Red) vs Cumulative Payments (Blue)")
     
     base = alt.Chart(df).encode(x=alt.X('Year', title='Years since graduation'))
     
-    # Area chart for Balance (Scary red area)
     area_balance = base.mark_area(opacity=0.3, color='#ff4b4b').encode(
-        y=alt.Y('Balance', title='Loan Balance (£)'),
+        y=alt.Y('Balance', title='Amount (£)'),
         tooltip=['Year', 'Balance', 'Salary']
     )
     
-    # Line for Payments
     line_paid = base.mark_line(color='#1E90FF', strokeWidth=4).encode(
         y='Paid',
         tooltip=['Year', 'Paid']
@@ -168,25 +180,24 @@ with tab1:
     st.altair_chart((area_balance + line_paid).interactive(), use_container_width=True)
     
     if extra_payment > 0:
-        st.info(f"💡 **Learning Moment:** You are paying an extra £{extra_payment}/month. Toggle it to £0 in the sidebar to see if it actually made a difference!")
+         st.info(f"ℹ️ **Overpayment Analysis:** You are paying an extra £{extra_payment}/mo. Toggle this to £0 in the sidebar to compare the difference.")
 
 with tab2:
-    st.markdown("### 📢 Spread the Word")
-    st.write("Most people have no idea how this math works. Copy your results below and share them.")
+    st.subheader("📢 Spread the Word")
+    st.write("Copy the summary below to share your reality check:")
     
     share_text = f"""
-🚨 My Student Loan Reality Check 🚨
+🚨 My Student Loan Reality Check
 
 💸 Borrowed: £{current_balance:,.0f}
-📉 Paying Back: £{total_repaid:,.0f}
+📉 Paying Back: £{total_repaid:,.0f} ({multiple:.1f}x original)
 🛑 Debt Remaining: £{final_balance:,.0f}
 
-I will pay {multiple:.1f}x my original loan and still not clear it.
-The system is broken. #RethinkRepayment #StudentLoans
+I will pay {multiple:.1f} times my loan and still not clear it.
+The system is broken.
     """
     st.code(share_text, language="text")
-    st.caption("Copy the text above and post it on Twitter/Instagram/WhatsApp.")
 
-# --- Data Table (Hidden by default) ---
-with st.expander("Show detailed year-by-year breakdown"):
+# --- Data Table ---
+with st.expander("📂 View Detailed Data Table"):
     st.dataframe(df.style.format({"Balance": "£{:,.0f}", "Paid": "£{:,.0f}", "Salary": "£{:,.0f}", "Interest": "£{:,.0f}"}))
