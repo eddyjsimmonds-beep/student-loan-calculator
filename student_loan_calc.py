@@ -22,7 +22,7 @@ st.markdown("""
 col_head1, col_head2 = st.columns([1, 5])
 with col_head1:
     try:
-        st.image("logo.png", width=120)
+        st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=120)
     except:
         st.markdown("# 🎓")
 
