@@ -9,7 +9,7 @@ st.set_page_config(page_title="Rethink Repayment Calculator", page_icon="🎓", 
 # --- Branding Section ---
 # Try to display the logo. If it's not uploaded yet, it just skips it without crashing.
 try:
-    st.image("logo.png", width=200) 
+    st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=200) 
 except:
     st.header("🎓 Rethink Repayment")
 
