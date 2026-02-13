@@ -13,7 +13,9 @@ APP_URL = "https://student-loan-reality.streamlit.app"
 st.markdown("""
 <style>
     .big-font { font-size:24px !important; font-weight: bold; }
-    /* Removed the .stMetric block that was breaking Dark Mode */
+    
+    /* REMOVED: The .stMetric styling block that caused the white-on-white issue.
+       Now it uses Streamlit's default theme (Dark Mode friendly). */
     
     /* Make buttons full width on mobile for easier tapping */
     .stButton button { width: 100%; border-radius: 8px; font-weight: bold;}
@@ -35,7 +37,7 @@ st.markdown("Discover the **'negative amortization'** trap: See why your payment
 
 # --- MOBILE TIP ---
 with st.expander("📝 **CLICK HERE to enter your loan details**", expanded=True):
-    st.info("👈 **Desktop:** Use the Sidebar on the left.\n\n📱 **Mobile:** Tap the **'>'** arrow at the top-left to open settings.")
+    st.info("👈 **Desktop:** Use the Sidebar on the left.\n\n📱 **Mobile:** Tap the **'>'** (or **'>>'**) arrow at the top-left to open settings.")
 
 st.divider()
 
@@ -148,7 +150,6 @@ multiple = total_repaid / current_balance
 # --- VERDICT DASHBOARD ---
 st.header("📊 The Verdict")
 
-# Using 2 columns instead of 4 for mobile readability
 c1, c2 = st.columns(2)
 c1.metric("Original Loan", f"£{current_balance:,.0f}")
 c2.metric("Total Paid", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x", delta_color="inverse")
@@ -197,9 +198,17 @@ with tab1:
          st.info(f"ℹ️ **Overpayment:** You are paying an extra £{extra_payment}/mo.")
 
     with st.expander("📂 View Detailed Data Table"):
-        # FIXED: Added .hide() to remove the duplicate index column
+        # FIXED: Using column_config is the most robust way to hide index and format currency
         st.dataframe(
-            df.style.format({"Balance": "£{:,.0f}", "Paid": "£{:,.0f}", "Salary": "£{:,.0f}", "Interest": "£{:,.0f}"}).hide(),
+            df,
+            hide_index=True, 
+            column_config={
+                "Year": st.column_config.NumberColumn(format="%d"),
+                "Balance": st.column_config.NumberColumn(format="£%.0f"),
+                "Paid": st.column_config.NumberColumn(format="£%.0f"),
+                "Salary": st.column_config.NumberColumn(format="£%.0f"),
+                "Interest": st.column_config.NumberColumn(format="£%.0f"),
+            },
             use_container_width=True
         )
 
