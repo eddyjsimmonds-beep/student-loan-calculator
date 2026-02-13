@@ -1,13 +1,3 @@
-Here is the complete, final code with every feature we discussed included: branding, career paths, the "Debt Trap" verdict, and the omni-channel sharing buttons.
-
-📋 Instructions
-Copy the code block below.
-
-Paste it into your student_loan_calc.py file.
-
-Save and commit to GitHub.
-
-Python
 import streamlit as st
 import pandas as pd
 import altair as alt
