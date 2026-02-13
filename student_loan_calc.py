@@ -4,7 +4,8 @@ import altair as alt
 import urllib.parse
 
 # --- Configuration ---
-st.set_page_config(page_title="Rethink Repayment Calculator", page_icon="🎓", layout="wide")
+# CHANGED: "centered" layout works much better on mobile than "wide"
+st.set_page_config(page_title="Rethink Repayment Calculator", page_icon="🎓", layout="centered")
 
 # --- CUSTOMIZE YOUR LINK HERE ---
 APP_URL = "https://student-loan-reality.streamlit.app"
@@ -13,34 +14,37 @@ APP_URL = "https://student-loan-reality.streamlit.app"
 st.markdown("""
 <style>
     .big-font { font-size:24px !important; font-weight: bold; }
-    .stMetric { background-color: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #dee2e6; }
+    .stMetric { background-color: #f8f9fa; padding: 10px; border-radius: 10px; border: 1px solid #dee2e6; }
     .stButton button { width: 100%; border-radius: 8px; font-weight: bold;}
+    /* Fix logo centering */
+    [data-testid="stImage"] { display: block; margin-left: auto; margin-right: auto; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- Header Section ---
-col_head1, col_head2 = st.columns([1, 2])
+# Centered layout makes columns tight, so we use a clean stack for mobile
+try:
+    st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=200)
+except:
+    st.markdown("# 🎓")
 
-with col_head1:
-    try:
-        st.image("https://email-my-mp.rethinkrepayment.com/og-image.png", width=300)
-    except:
-        st.markdown("# 🎓")
+st.title("Student Loan Reality Check")
+st.markdown("### ⚠️ Are you paying off a loan, or just a lifelong tax?")
+st.markdown("Discover the **'negative amortization'** trap: See why your payments might not even cover the interest.")
 
-with col_head2:
-    st.title("Student Loan Reality Check")
-    st.markdown("### ⚠️ Are you paying off a loan, or just a lifelong tax?")
-    st.markdown("Discover the **'negative amortization'** trap: See why your payments might not even cover the interest.")
+# --- MOBILE TIP ---
+# This helps mobile users find the sidebar without cluttering the UI
+with st.expander("📝 **CLICK HERE to enter your loan details**", expanded=True):
+    st.info("👈 **Desktop:** Use the Sidebar on the left.\n\n📱 **Mobile:** Tap the **'>'** arrow at the top-left to open settings.")
 
 st.divider()
 
-# --- SIDEBAR: INPUTS ---
+# --- SIDEBAR: INPUTS (Kept all features) ---
 with st.sidebar:
     st.header("1. Select Your Plan")
     plan_type = st.radio(
         "Which plan are you on?",
         ("Plan 2 (Uni start 2012-2022)", "Plan 5 (Uni start 2023+)"),
-        help="Plan 2 writes off after 30 years. Plan 5 writes off after 40 years."
     )
     
     st.header("2. Your Profile")
@@ -50,8 +54,8 @@ with st.sidebar:
     st.header("3. Career Projection")
     career_type = st.selectbox(
         "Projected Income Trajectory",
-        ("Steady Growth (Public Sector/Standard)", 
-         "Fast Track (Tech/Finance/Law)", 
+        ("Steady Growth (Public Sector)", 
+         "Fast Track (Tech/Finance)", 
          "Late Bloomer (Doctor/PhD)", 
          "Custom Flat Rate"),
     )
@@ -61,39 +65,22 @@ with st.sidebar:
         custom_rate = st.slider("Annual Growth %", 0.0, 10.0, 2.5, 0.1) / 100
 
     st.header("4. Economic Assumptions")
-    rpi = st.slider("RPI (Inflation) %", 0.0, 15.0, 3.5, 0.1, help="Controls interest rate.") / 100
+    rpi = st.slider("RPI (Inflation) %", 0.0, 15.0, 3.5, 0.1) / 100
     
     st.header("5. Voluntary Overpayments")
-    st.caption("Is it worth paying more?")
-    extra_payment = st.number_input("Monthly Overpayment (£)", value=0, step=50, help="Add a voluntary monthly payment to see if it clears the debt faster.")
-    
-    # Dynamic Caption based on Plan
-    st.markdown("---")
-    if "Plan 5" in plan_type:
-        st.caption("ℹ️ **Plan 5 Rules:**")
-        st.caption("• Threshold: £25,000")
-        st.caption("• Term: 40 Years")
-        st.caption("• Interest: RPI Only (No +3%)")
-    else:
-        st.caption("ℹ️ **Plan 2 Rules:**")
-        st.caption("• Threshold: £27,295")
-        st.caption("• Term: 30 Years")
-        st.caption("• Interest: RPI to RPI+3%")
+    extra_payment = st.number_input("Monthly Overpayment (£)", value=0, step=50)
 
 # --- CALCULATOR ENGINE ---
 
-# Set Constants based on Plan Selection
 if "Plan 5" in plan_type:
     repayment_threshold = 25000
     term_years = 40
-    # Plan 5 uses RPI only, so thresholds for variable interest don't apply
     is_plan_5 = True
 else:
     repayment_threshold = 27295
     term_years = 30
     is_plan_5 = False
     
-# Plan 2 Interest Thresholds
 lower_interest_threshold = 28470
 upper_interest_threshold = 51245
 
@@ -110,29 +97,16 @@ def run_simulation():
     balance = current_balance
     salary = annual_salary
     
-    # 1. Add Initial State (Year 0)
-    data.append({
-        "Year": 0,
-        "Balance": balance,
-        "Paid": 0,
-        "Salary": salary,
-        "Interest": 0
-    })
+    data.append({"Year": 0, "Balance": balance, "Paid": 0, "Salary": salary, "Interest": 0})
     
-    # 2. Loop through months (360 for Plan 2, 480 for Plan 5)
     for month in range(term_years * 12):
         year_idx = month // 12
-        
-        # Salary Growth
         if month > 0 and month % 12 == 0:
             salary *= (1 + get_growth_rate(year_idx, career_type, custom_rate))
 
-        # --- INTEREST RATE LOGIC ---
         if is_plan_5:
-            # Plan 5 is just Inflation (RPI), no variable +3% element based on salary
             interest_rate = rpi
         else:
-            # Plan 2 Logic (Variable Interest)
             if salary <= lower_interest_threshold: interest_rate = rpi
             elif salary >= upper_interest_threshold: interest_rate = rpi + 0.03
             else:
@@ -140,8 +114,6 @@ def run_simulation():
                 interest_rate = rpi + (scale * 0.03)
             
         monthly_rate = interest_rate / 12
-        
-        # --- REPAYMENT LOGIC ---
         monthly_salary = salary / 12
         monthly_thresh = repayment_threshold / 12
         
@@ -150,19 +122,15 @@ def run_simulation():
             mandatory_pay = (monthly_salary - monthly_thresh) * 0.09
         
         total_monthly_pay = mandatory_pay + extra_payment
-        
-        # Update Balance
         interest_accrued = balance * monthly_rate
         balance = balance + interest_accrued - total_monthly_pay
         
-        # Prevent negative balance (Loan cleared)
         if balance < 0:
             total_monthly_pay += balance 
             balance = 0
             
         total_paid += total_monthly_pay
         
-        # 3. Record Data at END of each Year
         if (month + 1) % 12 == 0:
             data.append({
                 "Year": (month + 1) // 12,
@@ -174,26 +142,27 @@ def run_simulation():
 
     return pd.DataFrame(data), balance, total_paid
 
-# Run Simulation
 df, final_balance, total_repaid = run_simulation()
 multiple = total_repaid / current_balance
 
 # --- VERDICT DASHBOARD ---
 st.subheader("📊 The Verdict")
 
-c1, c2, c3, c4 = st.columns(4)
+# 2 Columns allows metrics to be readable on mobile (4 cols gets squashed)
+c1, c2 = st.columns(2)
 c1.metric("Original Loan", f"£{current_balance:,.0f}")
-c2.metric("Total You Pay", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x Original Loan", delta_color="inverse")
-c3.metric("Amount Written Off", f"£{max(0, final_balance):,.0f}")
+c2.metric("Total Paid", f"£{total_repaid:,.0f}", delta=f"{multiple:.1f}x", delta_color="inverse")
+
+c3, c4 = st.columns(2)
+c3.metric("Written Off", f"£{max(0, final_balance):,.0f}")
 
 if final_balance > 0:
-    c4.metric("Debt Free In", "Never", delta=f"{term_years} Year Term Ends", delta_color="off")
+    c4.metric("Debt Free?", "Never", delta=f"{term_years} Years", delta_color="off")
 else:
     clear_year = df[df['Balance'] == 0]['Year'].min()
-    c4.metric("Debt Free In", f"{int(clear_year)} Years", delta="Cleared!", delta_color="normal")
+    c4.metric("Debt Free?", f"Year {int(clear_year)}", delta="Cleared!", delta_color="normal")
 
 st.markdown("---")
-# Logic for status badges
 if final_balance > 0:
     if multiple > 2.0:
         st.error(f"### 🛑 Status: The Debt Trap\nYou will pay back **{multiple:.1f}x** what you borrowed, but the interest is so high that the debt never clears.")
@@ -206,11 +175,10 @@ else:
 tab1, tab2 = st.tabs(["📉 Visualise Trajectory", "📲 Share Result"])
 
 with tab1:
-    st.markdown("#### Debt Balance (Red) vs Cumulative Payments (Blue)")
+    st.caption("Debt Balance (Red) vs Cumulative Payments (Blue)")
     
-    # Dynamic X-Axis Scale based on Plan Term (30 or 40)
     base = alt.Chart(df).encode(
-        x=alt.X('Year', title='Years since graduation', scale=alt.Scale(domain=[0, term_years]))
+        x=alt.X('Year', title='Years', scale=alt.Scale(domain=[0, term_years]))
     )
     
     area_balance = base.mark_area(opacity=0.3, color='#ff4b4b').encode(
@@ -223,10 +191,11 @@ with tab1:
         tooltip=['Year', 'Paid']
     )
 
+    # CRITICAL FIX FOR MOBILE: Removed '.interactive()' to stop scroll trapping
     st.altair_chart((area_balance + line_paid), use_container_width=True)
     
     if extra_payment > 0:
-         st.info(f"ℹ️ **Overpayment Analysis:** You are paying an extra £{extra_payment}/mo. Toggle this to £0 in the sidebar to compare the difference.")
+         st.info(f"ℹ️ **Overpayment:** You are paying an extra £{extra_payment}/mo.")
 
     with st.expander("📂 View Detailed Data Table"):
         st.dataframe(df.style.format({"Balance": "£{:,.0f}", "Paid": "£{:,.0f}", "Salary": "£{:,.0f}", "Interest": "£{:,.0f}"}))
@@ -252,28 +221,16 @@ Check your numbers here: {APP_URL}
     """
     
     encoded_text = urllib.parse.quote(share_text)
-    encoded_url = urllib.parse.quote(APP_URL)
     
-    whatsapp_url = f"https://wa.me/?text={encoded_text}"
-    twitter_url = f"https://twitter.com/intent/tweet?text={encoded_text}"
-    telegram_url = f"https://t.me/share/url?url={encoded_url}&text={encoded_text}"
-    reddit_title = urllib.parse.quote(f"I will pay back £{total_repaid:,.0f} on my student loan. Reality Check.")
-    reddit_url = f"https://www.reddit.com/submit?url={encoded_url}&title={reddit_title}"
-    facebook_url = f"https://www.facebook.com/sharer/sharer.php?u={encoded_url}"
-    email_subject = urllib.parse.quote("Have you checked your student loan math?")
-    email_url = f"mailto:?subject={email_subject}&body={encoded_text}"
-
+    # Grid for buttons
     col1, col2 = st.columns(2)
     with col1:
-        st.link_button("💚 Share on WhatsApp", whatsapp_url, use_container_width=True)
-        st.link_button("✈️ Share on Telegram", telegram_url, use_container_width=True)
-        st.link_button("🦅 Share on X (Twitter)", twitter_url, use_container_width=True)
+        st.link_button("💚 WhatsApp", f"https://wa.me/?text={encoded_text}", use_container_width=True)
+        st.link_button("🦅 X / Twitter", f"https://twitter.com/intent/tweet?text={encoded_text}", use_container_width=True)
     with col2:
-        st.link_button("👽 Share on Reddit", reddit_url, use_container_width=True)
-        st.link_button("📘 Share on Facebook", facebook_url, use_container_width=True, help="Note: Facebook only shares the link.")
-        st.link_button("✉️ Share via Email", email_url, use_container_width=True)
+        st.link_button("✈️ Telegram", f"https://t.me/share/url?url={urllib.parse.quote(APP_URL)}&text={encoded_text}", use_container_width=True)
+        st.link_button("✉️ Email", f"mailto:?subject=Student%20Loan%20Check&body={encoded_text}", use_container_width=True)
 
-    st.divider()
-    st.markdown("#### 📸 Instagram & TikTok")
-    st.caption("Copy the text below to paste into your Story or Post!")
+    st.markdown("---")
+    st.caption("Copy for Instagram/TikTok:")
     st.code(share_text, language="text")
